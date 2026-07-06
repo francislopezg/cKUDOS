@@ -7,15 +7,15 @@ This repository contains a C implementation of OSCORE-KUDOS, based on uOSCORE-uE
 
 ## How to Build and Run
 * Execute `up.sh` to build the docker image containing the solution and to run a Docker container which uses the previously built Docker image.
-* Execute `docker exec -it oscore-kudos-h1-1 /bin/bash` to get an interactive shell in the container.
-* Once into the container, browse until `/home/kudos/uoscore-uedhoc-3.0.5-kudos/samples/linux_oscore_kudos/initiator/`.
-* Execute `make` to build the Initiator.
+* Execute `docker exec -it ckudos-h1-1 /bin/bash` to get an interactive shell in the container.
+* Once into the container, browse until `/home/kudos/uoscore-uedhoc-3.0.5-kudos/samples/linux_oscore_kudos/client/`.
+* Execute `make` to build the Client.
 
-* Execute `docker exec -it oscore-kudos-h1-1 /bin/bash` to get another terminal in the container.
-* Browse until `/home/uedhoc/uoscore-uedhoc-3.0.5-kudos/samples/linux_oscore_kudos/responder/` and execute `make` to build the Responder.
-* Execute `./build/responder` to run the Responder (which contains a CoAP server that waits for connections).
+* Execute `docker exec -it ckudos-h1-1 /bin/bash` to get another terminal in the container.
+* Browse until `/home/uedhoc/uoscore-uedhoc-3.0.5-kudos/samples/linux_oscore_kudos/server/` and execute `make` to build the Server.
+* Execute `./build/server` to run the Server (which contains a CoAP server that waits for connections).
 
-* Back into the Initiator terminal, execute `./build/initiator` to run the Initiator. 
+* Back into the Initiator terminal, execute `./build/client` to run the Initiator. 
 
 ## How to clean the compilation
 * Execute `make clean` in both the Initiator and Responder folders.
