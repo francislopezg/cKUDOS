@@ -118,7 +118,7 @@ int main()
 	struct sockaddr_in6 client_addr;
 	client_addr_len = sizeof(client_addr);
 	memset(&client_addr, 0, sizeof(client_addr));
-	const char IPV6_SERVADDR[] = { "::1" };
+	const char IPV6_SERVADDR[] = { "::1"};
 	err = sock_init(SOCK_SERVER, IPV6_SERVADDR, IPv6, &servaddr,
 			sizeof(servaddr), &sockfd);
 	if (err < 0) {
@@ -217,7 +217,9 @@ int main()
 			if (err < 0)
 				return err;
 
-			break;
+			// Cleaning necessary for the FS mode.
+			c_server.rrc.kudos_x1 = 0;
+			c_server.rrc.kudos_nonce_1.len = 0;
 
 		} else {
 			/*we received a CoAP packet*/

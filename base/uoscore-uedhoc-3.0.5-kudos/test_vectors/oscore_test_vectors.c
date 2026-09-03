@@ -19,8 +19,11 @@ const uint8_t T1__MASTER_SECRET[16] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
 					0x0d, 0x0e, 0x0f, 0x10 };
 uint8_t T1__MASTER_SECRET_LEN = sizeof(T1__MASTER_SECRET);
 
-const uint8_t *T1__SENDER_ID = NULL;
-uint8_t T1__SENDER_ID_LEN = 0;
+//const uint8_t *T1__SENDER_ID = NULL;
+//uint8_t T1__SENDER_ID_LEN = 0;
+
+const uint8_t T1__SENDER_ID[1] = { 0x02 };
+uint8_t T1__SENDER_ID_LEN = sizeof(T1__SENDER_ID);
 
 const uint8_t T1__RECIPIENT_ID[1] = { 0x01 };
 uint8_t T1__RECIPIENT_ID_LEN = sizeof(T1__RECIPIENT_ID);

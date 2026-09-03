@@ -15,7 +15,7 @@
 
 extern const uint8_t T1__MASTER_SECRET[16];
 extern uint8_t T1__MASTER_SECRET_LEN;
-extern const uint8_t *T1__SENDER_ID;
+extern const uint8_t T1__SENDER_ID[1];
 extern uint8_t T1__SENDER_ID_LEN;
 extern const uint8_t T1__RECIPIENT_ID[1];
 extern uint8_t T1__RECIPIENT_ID_LEN;

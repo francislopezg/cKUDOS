@@ -67,7 +67,7 @@ int main()
 #endif
 #ifdef USE_IPV6
 	struct sockaddr_in6 servaddr;
-	const char IPV6_SERVADDR[] = { "::1" };
+	const char IPV6_SERVADDR[] = { "::1"};
 	err = sock_init(SOCK_CLIENT, IPV6_SERVADDR, IPv6, &servaddr,
 			sizeof(servaddr), &sockfd);
 	if (err < 0) {
@@ -113,7 +113,9 @@ int main()
 	CoapPDU *recvPDU;
 	uint8_t echo_opt_val[12];
 
-	while (1) {
+	uint8_t i = 0;
+
+	while (i<2) {
 		uint32_t buf_oscore_len = sizeof(buf_oscore);
 		uint32_t coap_rx_buf_len = sizeof(coap_rx_buf);
 
@@ -207,7 +209,8 @@ int main()
 
 		/*wait 5 sec before sending the next packet*/
 		sleep(5);
-		break;
+		printf("NEW EXECUTION\n");
+		i++;
 	}
 	close(sockfd);
 	return 0;

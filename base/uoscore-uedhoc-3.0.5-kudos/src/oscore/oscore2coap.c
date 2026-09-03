@@ -111,11 +111,13 @@ STATIC enum err oscore_option_parser(const struct o_coap_option *opt,
 					return oscore_inpkt_invalid_piv;
 					break;
 				default:
+					//printf("parsing piv\n");
 					out->piv.ptr = val_ptr;
 					out->piv.len = out->n;
 					val_ptr += out->n;
 					temp_kid_len = (uint8_t)(temp_kid_len -
 								 out->n);
+					//PRINT_ARRAY("PARSED PIV", out->piv.ptr, out->piv.len);
 					break;
 				}
 
@@ -314,9 +316,13 @@ decrypt_wrapper(struct byte_array *ciphertext, struct byte_array *plaintext,
 	/* Calculate new nonce from oscore option - only if required by the usecase.
 	   If not, nonce from the corresponding request (rcc.nonce) is used. */
 	if (NULL != new_nonce_oscore_option) {
-		TRY(create_nonce(&new_nonce_oscore_option->kid,
-				 &new_nonce_oscore_option->piv,
-				 &c->cc.common_iv, &new_nonce));
+		//TRY(create_nonce(&new_nonce_oscore_option->kid,
+				 //&new_nonce_oscore_option->piv,
+				 //&c->cc.common_iv, &new_nonce));
+		TRY(create_nonce(&c->rc.recipient_id,
+				&new_nonce_oscore_option->piv,
+				&c->cc.common_iv, &new_nonce));
+		
 		nonce = new_nonce;
 	} else {
 		nonce = c->rrc.nonce;
@@ -487,6 +493,8 @@ enum err oscore2coap(uint8_t *buf_in, uint32_t buf_in_len, uint8_t *buf_out,
 			}
 		} else {
 			/*regular response received*/
+			//PRINT_ARRAY("OSCORE OPTION PIV", oscore_option.piv.ptr, oscore_option.piv.len);
+
 			if (oscore_option.piv.len != 0) {
 				/*response with PIV*/
 				TRY(decrypt_wrapper(ciphertext, &plaintext, c,

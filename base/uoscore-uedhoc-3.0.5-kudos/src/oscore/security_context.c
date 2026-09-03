@@ -184,6 +184,17 @@ enum err oscore_context_init(struct oscore_init_params *params,
 int is_lexicographically_shorter(const struct byte_array *a,
                                  const struct byte_array *b)
 {
+
+
+	if (a->len < b->len) {
+		return 1;
+	}
+	else if (b->len < a->len) {
+		return 0;
+	}
+
+
+
     uint32_t min_len = (a->len < b->len) ? a->len : b->len;
 
     // Compare byte by byte
@@ -284,7 +295,7 @@ enum err oscore_context_update(struct byte_array *N1, uint8_t X1, struct byte_ar
 	}
 	else {
 		// Empty input2 byte string
-		input1_enc.ptr[0] = 0x60;
+		input1_enc.ptr[0] = 0x40;
 		input1_enc.len = 1;
 	}
 	PRINT_ARRAY("Input_1 encoded:", input1_enc.ptr, input1_enc.len);
@@ -305,7 +316,7 @@ enum err oscore_context_update(struct byte_array *N1, uint8_t X1, struct byte_ar
 	}
 	else {
 		// Empty input2 byte string
-		input2_enc.ptr[0] = 0x60;
+		input2_enc.ptr[0] = 0x40;
 		input2_enc.len = 1;
 	}
 	PRINT_ARRAY("Input_2 encoded:", input2_enc.ptr, input2_enc.len);
@@ -342,8 +353,15 @@ enum err oscore_context_update(struct byte_array *N1, uint8_t X1, struct byte_ar
 	memset(c->cc.master_secret.ptr, 0, 16);
 	PRINT_ARRAY("c->cc.master_secret:", c->cc.master_secret.ptr, c->cc.master_secret.len);
 
+	//PRINT_ARRAY("old OSCORE Master Secret:", c->cc.master_secret_old.ptr, c->cc.master_secret_old.len);
+
 	kudos_kdf(SHA_256, &(c->cc.master_secret_old), "oscore key update", &X_N, &(c->cc.master_secret));
 	PRINT_ARRAY("new OSCORE Master Secret:", c->cc.master_secret.ptr, c->cc.master_secret.len);
+
+	//NEW ==================== Updating also Common_IV
+	TRY(derive_common_iv(&c->cc));
+
+	//TRY(server_replay_window_reinit( 0, &(c->rc.replay_window)));
 
 	TRY(derive_recipient_key(&(c->cc), &(c->rc)));
 	TRY(derive_sender_key(&(c->cc), &(c->sc)));

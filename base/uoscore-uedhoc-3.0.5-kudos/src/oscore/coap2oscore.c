@@ -641,9 +641,14 @@ static enum err encrypt_wrapper(struct byte_array *plaintext,
 	struct byte_array token =
 		BYTE_ARRAY_INIT(input_coap->token, input_coap->header.TKL);
 
-	/* Generate new PIV/nonce if needed. */
+	/* Generate new PIV/nonce if needed. New PIV and nonce always needed in KUDOS*/
+	bool is_kudos = false;
+	if (c->rrc.kudos_nonce_1.len > 0){
+		is_kudos = true;
+	}  
+
 	bool use_new_piv = needs_new_piv(msg_type, c->rrc.echo_state_machine);
-	if (use_new_piv) {
+	if (use_new_piv || is_kudos) {
 		TRY(ssn2piv(c->sc.ssn, &new_piv));
 		TRY(generate_new_ssn(c));
 		TRY(create_nonce(&c->sc.sender_id, &new_piv, &c->cc.common_iv,
