@@ -96,6 +96,8 @@ STATIC enum err oscore_option_parser(const struct o_coap_option *opt,
 
 					val_ptr++;
 					temp_kid_len--;
+				} else {
+					out->d = 0;
 				}
 
 				/* Get PIV */

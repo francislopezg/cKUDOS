@@ -29,7 +29,7 @@ extern "C" {
 #include "cantcoap.h"
 #include "oscore_test_vectors.h"
 
-#define USE_IPV6
+#define USE_IPV4
 #define ECHO_OPT_NUM 252
 
 struct context c_client;
@@ -46,8 +46,30 @@ int generate_nonce(struct byte_array * nonce) {
     return (n == KUDOS_NONCE_LEN) ? 0 : -1;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
+	if (argc < 3 || (strcmp(argv[1], "fs") != 0 &&
+			  strcmp(argv[1], "non-fs") != 0)) {
+		fprintf(stderr, "Usage: %s <fs|non-fs> <number_of_executions[1-10]> <oscore|*empty>\n", argv[0]);
+		return EXIT_FAILURE;
+	}
+	const bool fs_mode = (strcmp(argv[1], "fs") == 0);
+	printf("KUDOS mode: %s\n", fs_mode ? "FS" : "non-FS");
+
+	char *endptr;
+	long EXECUTIONS = strtol(argv[2], &endptr, 10);
+
+	if ((argv[2] == endptr) || (*endptr != '\0') ||
+	    (EXECUTIONS < 1) || (EXECUTIONS > 10)) {
+	    fprintf(stderr, "Usage: %s <fs|non-fs> <number_of_executions[1-10]> <oscore|*empty>\n", argv[0]);
+	    return EXIT_FAILURE;
+	}
+
+	printf("Number of executions: %ld\n", EXECUTIONS);
+
+	const bool oscore_after_kudos =
+    (argc >= 4 && strcmp(argv[3], "oscore") == 0);
+
 	setbuf(stdout, NULL); //disable printf buffereing
 	err r;
 	int err;
@@ -57,6 +79,7 @@ int main()
 #ifdef USE_IPV4
 	struct sockaddr_in servaddr;
 	const char IPV4_SERVADDR[] = { "127.0.0.1" };
+
 	err = sock_init(SOCK_CLIENT, IPV4_SERVADDR, IPv4, &servaddr,
 			sizeof(servaddr), &sockfd);
 	if (err < 0) {
@@ -102,12 +125,14 @@ int main()
 		OSCORE_SHA_256,
 		true,
 	};
-	r = oscore_context_init(&params, &c_client);
 
-	if (r != ok) {
-		printf("Error during establishing an OSCORE security context!\n");
+	if (fs_mode){
+		r = oscore_context_init(&params, &c_client);
+		if (r != ok) {
+			printf("Error during establishing an OSCORE security context!\n");
+		}
 	}
-
+	
 	uint8_t buf_oscore[256];
 	uint8_t coap_rx_buf[256];
 	CoapPDU *recvPDU;
@@ -115,7 +140,13 @@ int main()
 
 	uint8_t i = 0;
 
-	while (i<2) {
+	while (i<EXECUTIONS) {
+
+		//Going back to old context in no-FS mode.
+		if (!fs_mode){
+			r = oscore_context_init(&params, &c_client);
+		}
+
 		uint32_t buf_oscore_len = sizeof(buf_oscore);
 		uint32_t coap_rx_buf_len = sizeof(coap_rx_buf);
 
@@ -146,10 +177,13 @@ int main()
 		if (res != 0) return -1;
 		PRINT_ARRAY("N1 gen:\n", N1.ptr, N1.len);
 
-		uint8_t X1 = (KUDOS_NONCE_LEN - 1) & 0x0F;
-
+		// Set the KUDOS flags according to the selected mode.
+		uint8_t X1 = fs_mode
+			? ((KUDOS_NONCE_LEN - 1) & 0x0F)
+			: (0x17 | ((KUDOS_NONCE_LEN - 1) & 0x07));
+			
 		// Generate CTX_TEMP.
-		r = oscore_context_update( &N1, X1, &NULL_ARRAY, NULL, 1, &c_client);
+		r = oscore_context_update( &N1, X1, &NULL_ARRAY, 0, 1, &c_client);
 		if (r != ok) {
 			printf("Error in oscore_context_update (Error code %d)!\n", r);
 		}
@@ -207,10 +241,90 @@ int main()
 			}
 		}
 
+		//Cleaning necessary.
+		c_client.rrc.kudos_x1 = 0;
+		c_client.rrc.kudos_nonce_1.len = 0;
+		c_client.cc.master_secret_old.len = 0;
+
 		/*wait 5 sec before sending the next packet*/
 		sleep(5);
 		printf("NEW EXECUTION\n");
 		i++;
+	}
+
+	if (oscore_after_kudos){
+		uint32_t buf_oscore_len = sizeof(buf_oscore);
+		uint32_t coap_rx_buf_len = sizeof(coap_rx_buf);
+
+		// Generate inner CoAP packet.
+		protected_pdu->reset();
+		protected_pdu->setVersion(1);
+		protected_pdu->setType(CoapPDU::COAP_CONFIRMABLE);
+		protected_pdu->setCode(CoapPDU::COAP_POST);
+		protected_pdu->setToken((uint8_t *)&(++token), sizeof(token));
+		protected_pdu->setURI((char *)"/.well-known/core");
+		protected_pdu->setMessageID(mid1++);
+		if (second_request) {
+			protected_pdu->addOption(ECHO_OPT_NUM,
+						 sizeof(echo_opt_val),
+						 echo_opt_val);
+			second_request = false;
+		}
+
+		if (protected_pdu->validate()) {
+			printf("\n=================================================\n");
+			printf("CoAP message to be protected with OSCORE\n");
+			protected_pdu->printHuman();
+		}
+		r = coap2oscore(protected_pdu->getPDUPointer(),
+				(uint16_t)protected_pdu->getPDULength(),
+				buf_oscore, &buf_oscore_len, &c_client);
+		if (r != ok) {
+			printf("Error in coap2oscore (Error code %d)!\n", r);
+		}
+
+		sendto(sockfd, buf_oscore, buf_oscore_len, 0,
+		       (const struct sockaddr *)&servaddr, sizeof(servaddr));
+
+		/* receive */
+		n = recvfrom(sockfd, (char *)buffer, MAXLINE, MSG_WAITALL,
+			     (struct sockaddr *)&servaddr, &len);
+		if (n < 0) {
+			printf("no response received\n");
+		} else {
+			r = oscore2coap((uint8_t *)buffer, n, coap_rx_buf,
+					&coap_rx_buf_len, &c_client);
+
+			if (r != ok) {
+				printf("Error in oscore2coap (Error code %d)!\n",
+				       r);
+			}
+			recvPDU = new CoapPDU((uint8_t *)coap_rx_buf,
+					      coap_rx_buf_len);
+			if (recvPDU->validate()) {
+				printf("\n=============================================\n");
+				printf("Response CoAP message\n");
+				recvPDU->printHuman();
+			}
+
+			if (first_response) {
+				first_response = false;
+				CoapPDU::CoapOption *opts =
+					recvPDU->getOptions();
+				int num_opts = recvPDU->getNumOptions();
+				for (int i = 0; i < num_opts; i++) {
+					if (opts[i].optionNumber ==
+					    ECHO_OPT_NUM) {
+						printf("A response to the first request is received, which contains an ECHO option\n");
+						memcpy(echo_opt_val,
+						       opts[i].optionValuePointer,
+						       opts[i].optionValueLength);
+						second_request = true;
+						break;
+					}
+				}
+			}
+		}
 	}
 	close(sockfd);
 	return 0;

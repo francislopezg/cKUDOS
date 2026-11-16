@@ -358,15 +358,15 @@ enum err oscore_context_update(struct byte_array *N1, uint8_t X1, struct byte_ar
 	kudos_kdf(SHA_256, &(c->cc.master_secret_old), "oscore key update", &X_N, &(c->cc.master_secret));
 	PRINT_ARRAY("new OSCORE Master Secret:", c->cc.master_secret.ptr, c->cc.master_secret.len);
 
-	//NEW ==================== Updating also Common_IV
+	//Updating also Common_IV
 	TRY(derive_common_iv(&c->cc));
 
-	//TRY(server_replay_window_reinit( 0, &(c->rc.replay_window)));
+	TRY(server_replay_window_reinit( 0, &(c->rc.replay_window)));
 
 	TRY(derive_recipient_key(&(c->cc), &(c->rc)));
 	TRY(derive_sender_key(&(c->cc), &(c->sc)));
 
-	//Reservar memoria para los nonces.
+	//Storing the nonces.
 	if (send){
 		c->rrc.kudos_nonce_1.len = sizeof(c->rrc.kudos_nonce_1_buf);
 		c->rrc.kudos_nonce_1.ptr = c->rrc.kudos_nonce_1_buf;

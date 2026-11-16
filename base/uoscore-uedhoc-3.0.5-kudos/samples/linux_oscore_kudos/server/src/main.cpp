@@ -28,7 +28,7 @@ extern "C" {
 #include "cantcoap.h"
 #include "oscore_test_vectors.h"
 
-#define USE_IPV6
+#define USE_IPV4
 #define ECHO_OPT_NUM 252
 
 int generate_nonce(struct byte_array * nonce) {
@@ -85,8 +85,30 @@ static void prepare_CoAP_response(CoapPDU *recvPDU, CoapPDU *sendPDU)
 	}
 }
 
-int main()
+int main(int argc, char *argv[])
 {
+	if (argc < 3 || (strcmp(argv[1], "fs") != 0 &&
+			  strcmp(argv[1], "non-fs") != 0)) {
+		fprintf(stderr, "Usage: %s <fs|non-fs> <number_of_executions[1-10]> <oscore|*empty>\n", argv[0]);
+		return EXIT_FAILURE;
+	}
+	const bool fs_mode = (strcmp(argv[1], "fs") == 0);
+	printf("KUDOS mode: %s\n", fs_mode ? "FS" : "non-FS");
+
+	char *endptr;
+	long EXECUTIONS = strtol(argv[2], &endptr, 10);
+
+	if ((argv[2] == endptr) || (*endptr != '\0') ||
+	    (EXECUTIONS < 1) || (EXECUTIONS > 10)) {
+	    fprintf(stderr, "Usage: %s <fs|non-fs> <number_of_executions[1-10]> <oscore|*empty>\n", argv[0]);
+	    return EXIT_FAILURE;
+	}
+
+	printf("Number of executions: %ld\n", EXECUTIONS);
+
+	const bool oscore_after_kudos =
+    (argc >= 4 && strcmp(argv[3], "oscore") == 0);
+	
 	setbuf(stdout, NULL); //disable printf buffereing
 	err r;
 	int err, n;
@@ -144,12 +166,21 @@ int main()
 		OSCORE_SHA_256,
 		true,
 	};
-	r = oscore_context_init(&params, &c_server);
-	if (r != ok) {
-		printf("Error during establishing an OSCORE security context!\n");
+	if (fs_mode){
+		r = oscore_context_init(&params, &c_server);
+		if (r != ok) {
+			printf("Error during establishing an OSCORE security context!\n");
+		}
 	}
 
-	while (1) {
+	int i = 0;
+	while (i<EXECUTIONS) {
+
+		//Going back to old context in no-FS mode.
+		if (!fs_mode){
+			r = oscore_context_init(&params, &c_server);
+		}
+
 		uint32_t buf_oscore_len = sizeof(buf_oscore);
 		n = recvfrom(sockfd, (char *)buffer, sizeof(buffer), 0,
 			     (struct sockaddr *)&client_addr, &client_addr_len);
@@ -194,7 +225,10 @@ int main()
 			if (res != 0) return -1;
 			PRINT_ARRAY("N1 gen:\n", N1.ptr, N1.len);
 
-			uint8_t X1 = (0x40) | ((KUDOS_NONCE_LEN - 1) & 0x0F);
+			// Set the KUDOS flags according to the selected mode.
+			uint8_t X1 = fs_mode
+				? (0x40 | ((KUDOS_NONCE_LEN - 1) & 0x0F))
+				: (0x57 | ((KUDOS_NONCE_LEN - 1) & 0x07));
 
 			// Generate CTX_TEMP.
 			r = oscore_context_update( &N1, X1, &(c_server.rrc.kudos_nonce_2), c_server.rrc.kudos_x2, 1, &c_server);
@@ -220,7 +254,82 @@ int main()
 			// Cleaning necessary for the FS mode.
 			c_server.rrc.kudos_x1 = 0;
 			c_server.rrc.kudos_nonce_1.len = 0;
+			c_server.cc.master_secret_old.len = 0;
 
+		} else {
+			/*we received a CoAP packet*/
+			recvPDU = new CoapPDU((uint8_t *)buffer, n);
+			printf("\n=====================================================\n");
+			printf("Unprotected CoAP packet received:\n");
+			if (recvPDU->validate()) {
+				recvPDU->printHuman();
+			}
+
+			prepare_CoAP_response(recvPDU, sendPDU);
+
+			err = sendto(sockfd, sendPDU->getPDUPointer(),
+				     sendPDU->getPDULength(), 0,
+				     (struct sockaddr *)&client_addr,
+				     client_addr_len);
+			if (err < 0) {
+				return err;
+			}
+		}
+		i++;
+	}
+
+	if (oscore_after_kudos){
+		uint32_t buf_oscore_len = sizeof(buf_oscore);
+		n = recvfrom(sockfd, (char *)buffer, sizeof(buffer), 0,
+			     (struct sockaddr *)&client_addr, &client_addr_len);
+		if (n < 0)
+			return n;
+
+		r = oscore2coap((uint8_t *)buffer, n, coap_rx_buf,
+				&coap_rx_buf_len, &c_server);
+
+		if (r != ok && r != not_oscore_pkt &&
+		    r != first_request_after_reboot) {
+			printf("Error in oscore2coap (error code %d)!\n", r);
+		}
+
+		if (r != not_oscore_pkt) {
+			/*we received an OSCORE packet*/
+
+			printf("\n=====================================================\n");
+
+			if (r == first_request_after_reboot) {
+				/*we are here when the server received a first request after reboot*/
+				/*we assume that the server has rebooted before calling oscore_context_init*/
+				recvPDU = new CoapPDU((uint8_t *)buffer, n);
+				printf("First OSCORE packet received after reboot:\n");
+				if (recvPDU->validate()) {
+					recvPDU->printHuman();
+				}
+				prepare_first_CoAP_response(recvPDU, sendPDU);
+			} else {
+				recvPDU = new CoapPDU((uint8_t *)coap_rx_buf,
+						      coap_rx_buf_len);
+				printf("OSCORE packet received and converted to CoAP:\n");
+				if (recvPDU->validate()) {
+					recvPDU->printHuman();
+				}
+				prepare_CoAP_response(recvPDU, sendPDU);
+			}
+
+			r = coap2oscore(sendPDU->getPDUPointer(),
+					sendPDU->getPDULength(), buf_oscore,
+					&buf_oscore_len, &c_server);
+			if (r != ok) {
+				printf("Error in coap2oscore (error code %d)!\n",
+				       r);
+			}
+
+			err = sendto(sockfd, buf_oscore, buf_oscore_len, 0,
+				     (struct sockaddr *)&client_addr,
+				     client_addr_len);
+			if (err < 0)
+				return err;
 		} else {
 			/*we received a CoAP packet*/
 			recvPDU = new CoapPDU((uint8_t *)buffer, n);

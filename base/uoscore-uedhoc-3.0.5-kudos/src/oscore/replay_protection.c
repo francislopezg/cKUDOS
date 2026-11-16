@@ -58,7 +58,7 @@ enum err server_replay_window_reinit(uint64_t current_sequence_number,
 	}
 
 	/* don't accept seqNum=0 anymore */
-	replay_window->seq_num_zero_received = true;
+	replay_window->seq_num_zero_received = false;
 
 	return ok;
 }
