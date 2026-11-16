@@ -17,6 +17,14 @@ This repository contains a C implementation of OSCORE-KUDOS, based on uOSCORE-uE
 
 * Back into the Initiator terminal, execute `./build/client` to run the Initiator. 
 
+Both the server and client binaries receive the same parameters:
+./build/server <fs|non-fs> <num_executions[1-10]> <oscore|*empty>
+
+For example, to run the server in FS mode, running 2 successive executions of KUDOS and after that running a non-KUDOS OSCORE message exchange:
+./build/server fs 2 oscore
+Or to run the client in non-FS mode, running only 1 execution of KUDOS:
+./build/client non-fs 1
+
 ## How to clean the compilation
 * Execute `make clean` in both the Initiator and Responder folders.
 * Exit the container's terminal and execute `./down.sh` to stop and remove the Docker container.
